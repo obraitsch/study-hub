@@ -75,23 +75,66 @@ export default function MaterialsPage() {
         }
         setPublicMaterials(publicData || [])
 
-        // Always fetch university materials (will be empty if no user)
-        const { data: uniData, error: uniError } = await supabase
-          .from("materials")
-          .select(`*, users(name), universities(name)`)
-          .eq("is_university_specific", true)
-          .eq("university_id", user?.universityId || '')
-          .order("created_at", { ascending: false })
+        // Get user's profile to ensure we have the latest universityId
+        if (user?.id) {
+          const { data: userProfile, error: profileError } = await supabase
+            .from('users')
+            .select('university_id')
+            .eq('id', user.id)
+            .single()
 
-        if (uniError) {
-          const errorMessage = typeof uniError === 'object' ? 
-            (uniError.message || JSON.stringify(uniError)) : 
-            String(uniError);
-          setError(errorMessage);
-          console.error("Error fetching university materials:", errorMessage);
-          return;
+          if (profileError) {
+            console.error("Error fetching user profile:", profileError);
+            return;
+          }
+
+          console.log("User profile:", userProfile);
+          const universityId = userProfile?.university_id;
+
+          if (universityId) {
+            console.log("Fetching university materials for universityId:", universityId);
+            
+            // First, let's check what materials exist for this university without any filters
+            const { data: allMaterials, error: checkError } = await supabase
+              .from("materials")
+              .select("*")
+              .eq("university_id", universityId);
+            
+            console.log("All materials for this university (unfiltered):", allMaterials);
+            
+            // Now fetch the specific materials we want
+            const { data: uniData, error: uniError } = await supabase
+              .from("materials")
+              .select(`
+                *,
+                users (
+                  name
+                ),
+                universities (
+                  name
+                )
+              `)
+              .eq("university_id", universityId)
+              .order("created_at", { ascending: false })
+
+            if (uniError) {
+              const errorMessage = typeof uniError === 'object' ? 
+                (uniError.message || JSON.stringify(uniError)) : 
+                String(uniError);
+              setError(errorMessage);
+              console.error("Error fetching university materials:", errorMessage);
+              return;
+            }
+            console.log("Fetched university materials (filtered):", uniData);
+            setUniversityMaterials(uniData || []);
+          } else {
+            console.log("No university_id found in user profile");
+            setUniversityMaterials([]);
+          }
+        } else {
+          console.log("No user ID found");
+          setUniversityMaterials([]);
         }
-        setUniversityMaterials(user?.universityId ? (uniData || []) : [])
       } catch (err: any) {
         const errorMessage = err ? 
           (typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err)) : 
@@ -104,7 +147,7 @@ export default function MaterialsPage() {
     }
 
     fetchMaterials()
-  }, [supabase, user?.universityId])
+  }, [supabase, user?.id])
 
   // Filter materials effect
   useEffect(() => {
@@ -120,6 +163,7 @@ export default function MaterialsPage() {
       return matchesSearch && matchesSubject && matchesType && matchesRating
     })
 
+    // Show all materials in public view
     setMaterials(filtered)
   }, [
     searchQuery,
@@ -327,7 +371,9 @@ export default function MaterialsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {materials.map((material) => (
-                    <MaterialCard key={material.id} material={material} />
+                    <div key={material.id} className="w-full">
+                      <MaterialCard material={material} />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -355,20 +401,17 @@ export default function MaterialsPage() {
 
                   {universityMaterials.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {universityMaterials.map((material) => (
-                        <MaterialCard key={material.id} material={material} />
-                      ))}
+                      {universityMaterials
+                        .filter(material => material.is_university_specific && material.university_id === user?.universityId)
+                        .map((material) => (
+                          <MaterialCard key={material.id} material={material} />
+                        ))}
                     </div>
                   ) : (
                     <div className="text-center py-12">
-                      <School className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h2 className="text-xl font-bold mb-2">No University Materials Yet</h2>
-                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                      <p className="text-muted-foreground">
                         Your university doesn't have any materials yet. Be the first to upload!
                       </p>
-                      <Button asChild>
-                        <Link href="/upload">Upload University Material</Link>
-                      </Button>
                     </div>
                   )}
                 </div>
@@ -394,10 +437,10 @@ export default function MaterialsPage() {
 
 function MaterialCard({ material }: { material: any }) {
   return (
-    <Card key={material.id} className="flex flex-col h-full">
+    <Card className="flex flex-col h-full w-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
-          <Badge variant="outline">{material.type}</Badge>
+          <Badge variant="outline" className="truncate max-w-[120px]">{material.type}</Badge>
           <div className="flex items-center text-sm">
             <Star className="h-4 w-4 fill-primary text-primary mr-1" />
             <span>{material.rating}</span>
@@ -411,36 +454,42 @@ function MaterialCard({ material }: { material: any }) {
       </CardHeader>
       <CardContent className="pb-2 flex-grow">
         <div className="text-sm text-muted-foreground space-y-1">
-          <p>
+          <p className="truncate max-w-full">
             {material.course_id ? material.course_id : "General"} • {material.subject}
           </p>
-          <p>{material.universities?.name}</p>
-          <p className="text-xs">By {material.users?.name}</p>
+          <p className="truncate max-w-full">{material.universities?.name}</p>
+          <p className="text-xs truncate max-w-full">By {material.users?.name}</p>
           <p className="text-xs">Uploaded on {new Date(material.created_at).toLocaleDateString()}</p>
         </div>
       </CardContent>
-      <CardFooter className="pt-2 flex justify-between items-center">
-        <div className="text-xs text-muted-foreground">{material.downloads} downloads</div>
-        <div className="flex items-center">
-          {material.is_university_specific && (
-            <Badge variant="outline" className="mr-2 flex items-center gap-1">
-              <School className="h-3 w-3" /> University
-            </Badge>
-          )}
-          {material.price > 0 ? (
-            <Badge variant="secondary" className="mr-2">
-              {material.price} credits
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="mr-2">
-              Free
-            </Badge>
-          )}
-          <Button size="sm" variant="outline" asChild>
-            <Link href={`/materials/${material.id}`}>
-              <Download className="h-4 w-4 mr-1" /> View
-            </Link>
-          </Button>
+      <CardFooter className="pt-2">
+        <div className="flex flex-col w-full gap-2">
+          <div className="flex justify-between items-center w-full">
+            <div className="text-xs text-muted-foreground">{material.downloads} downloads</div>
+            <div className="flex items-center gap-2">
+              {material.is_university_specific && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <School className="h-3 w-3" /> University
+                </Badge>
+              )}
+              {material.price > 0 ? (
+                <Badge variant="secondary">
+                  {material.price} credits
+                </Badge>
+              ) : (
+                <Badge variant="secondary">
+                  Free
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
+              <Link href={`/materials/${material.id}`}>
+                <Download className="h-4 w-4 mr-1" /> View
+              </Link>
+            </Button>
+          </div>
         </div>
       </CardFooter>
     </Card>

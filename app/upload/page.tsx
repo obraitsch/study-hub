@@ -126,11 +126,22 @@ export default function UploadPage() {
     setLoading(true)
     
     try {
-      // 1. Get current user
+      // 1. Get current user and their profile
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
       if (userError || !user) {
         throw new Error("You must be logged in to upload materials")
+      }
+
+      // Get user's profile to access universityId
+      const { data: userProfile, error: profileError } = await supabase
+        .from('users')
+        .select('university_id')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError) {
+        throw new Error("Error fetching user profile: " + profileError.message)
       }
 
       // 2. Upload the file to storage
@@ -185,7 +196,7 @@ export default function UploadPage() {
         rating: null,
         is_university_specific: universityId ? true : false,
         course_id: formData.course_id,
-        university_id: formData.university_id,
+        university_id: userProfile.university_id || formData.university_id,
         user_id: user.id,
       }
 
