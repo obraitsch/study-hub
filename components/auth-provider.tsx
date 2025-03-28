@@ -44,107 +44,177 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const supabase = getSupabaseBrowserClient()
 
-  // Cache user data
-  const fetchUserData = async (authUser: User) => {
-    // Check if we already have user data
-    if (user && user.id === authUser.id) {
-      return user
+  useEffect(() => {
+    if (!supabase) {
+      console.error("Supabase client not initialized")
+      setLoading(false)
+      return
     }
 
-    const { data: userData, error } = await supabase
-      .from("users")
-      .select("*, universities(name)")
-      .eq("id", authUser.id)
-      .single()
+    const fetchUserData = async (authUser: User) => {
+      try {
+        // Fetch user profile data from the database
+        const { data: userData, error } = await supabase
+          .from("users")
+          .select("*, universities(name)")
+          .eq("id", authUser.id)
+          .single()
 
-    if (error) {
-      console.error("Error fetching user data:", error)
-      return null
+        if (error) {
+          console.error("Error fetching user data:", error)
+          return null
+        }
+
+        return {
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          university: userData.universities?.name,
+          universityId: userData.university_id,
+          credits: userData.credits,
+        }
+      } catch (error) {
+        console.error("Error in fetchUserData:", error)
+        return null
+      }
     }
 
-    const userProfile = {
-      id: userData.id,
-      name: userData.name,
-      email: userData.email,
-      university: userData.universities?.name,
-      universityId: userData.university_id,
-      credits: userData.credits,
+    // First, check for an existing session
+    const initializeAuth = async () => {
+      try {
+        // Get initial session
+        const { data: { session: initialSession } } = await supabase.auth.getSession()
+        
+        if (initialSession?.user) {
+          setSession(initialSession)
+          const userData = await fetchUserData(initialSession.user)
+          setUser(userData)
+        }
+        
+        // Set up auth state change listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, currentSession) => {
+            console.log("Auth state changed:", event, currentSession?.user?.id)
+            
+            if (currentSession?.user) {
+              setSession(currentSession)
+              const userData = await fetchUserData(currentSession.user)
+              setUser(userData)
+            } else {
+              setUser(null)
+              setSession(null)
+            }
+          }
+        )
+        
+        setLoading(false)
+        
+        // Clean up subscription on unmount
+        return () => {
+          subscription.unsubscribe()
+        }
+      } catch (error) {
+        console.error("Error initializing auth:", error)
+        setLoading(false)
+      }
     }
 
-    return userProfile
-  }
+    initializeAuth()
+  }, [supabase])
 
   const signIn = async (email: string, password: string) => {
+    setLoading(true)
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (error) return { error }
-
-      // Fetch user data immediately after sign in
-      if (data.user) {
-        const userData = await fetchUserData(data.user)
-        setUser(userData)
-        setSession(data.session)
+      if (error) {
+        console.error("Sign in error:", error)
       }
 
-      return { error: null }
-    } finally {
       setLoading(false)
+      return { error }
+    } catch (error) {
+      console.error("Unexpected sign in error:", error)
+      setLoading(false)
+      return { error: { name: "UnexpectedError", message: "An unexpected error occurred" } as AuthError }
     }
   }
 
   const signUp = async (email: string, password: string, name: string, universityId: string) => {
     setLoading(true)
 
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    try {
+      // Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      })
 
-    if (authError || !authData.user) {
+      if (authError || !authData.user) {
+        setLoading(false)
+        return { error: authError }
+      }
+
+      // Create user profile in the database
+      const { error: profileError } = await supabase.from("users").insert({
+        id: authData.user.id,
+        email,
+        name,
+        university_id: universityId,
+        credits: 10, // New users get 10 credits
+      })
+
       setLoading(false)
-      return { error: authError }
+
+      if (profileError) {
+        return { error: { name: "ProfileError", message: profileError.message } as AuthError }
+      }
+
+      return { error: null }
+    } catch (error) {
+      console.error("Unexpected sign up error:", error)
+      setLoading(false)
+      return { error: { name: "UnexpectedError", message: "An unexpected error occurred" } as AuthError }
     }
-
-    // Create user profile in the database
-    const { error: profileError } = await supabase.from("users").insert({
-      id: authData.user.id,
-      email,
-      name,
-      university_id: universityId,
-      credits: 10, // New users get 10 credits
-    })
-
-    setLoading(false)
-
-    if (profileError) {
-      return { error: { name: "ProfileError", message: profileError.message } as AuthError }
-    }
-
-    return { error: null }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    router.refresh()
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      setSession(null)
+      router.refresh()
+    } catch (error) {
+      console.error("Sign out error:", error)
+    }
   }
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    return { error }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      return { error }
+    } catch (error) {
+      console.error("Reset password error:", error)
+      return { error: { name: "UnexpectedError", message: "An unexpected error occurred" } as AuthError }
+    }
   }
 
   const updatePassword = async (password: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password,
-    })
-    return { error }
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password,
+      })
+      return { error }
+    } catch (error) {
+      console.error("Update password error:", error)
+      return { error: { name: "UnexpectedError", message: "An unexpected error occurred" } as AuthError }
+    }
   }
 
   return (
@@ -164,4 +234,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   )
 }
-
