@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useEffect, useState } from "react"
-import { getSupabaseBrowserClient } from "@/lib/supabase"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/hooks/use-auth"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
@@ -20,16 +20,44 @@ export default function UserClasses() {
 
       setLoading(true)
 
-      // This is a placeholder query - in a real app, you'd have a table that tracks user's courses
-      const { data, error } = await supabase.from("courses").select("*").eq("university_id", user.universityId).limit(5)
+      try {
+        // Fetch enrolled courses
+        const { data: enrollments, error: enrollmentsError } = await supabase
+          .from("course_enrollments")
+          .select("course_id")
+          .eq("user_id", user.id)
 
-      if (error) {
-        console.error("Error fetching courses:", error)
-      } else {
-        setCourses(data || [])
+        if (enrollmentsError) {
+          console.error("Error fetching enrollments:", enrollmentsError.message)
+          console.error("Error details:", enrollmentsError.details)
+          console.error("Error hint:", enrollmentsError.hint)
+        } else if (enrollments && enrollments.length > 0) {
+          // Get course IDs from enrollments
+          const courseIds = enrollments.map(e => e.course_id)
+
+          // Fetch course details
+          const { data: coursesData, error: coursesError } = await supabase
+            .from("courses")
+            .select("*, universities(name)")
+            .in("id", courseIds)
+            .order("name")
+
+          if (coursesError) {
+            console.error("Error fetching courses:", coursesError.message)
+            console.error("Error details:", coursesError.details)
+            console.error("Error hint:", coursesError.hint)
+          } else {
+            setCourses(coursesData || [])
+          }
+        } else {
+          setCourses([])
+        }
+      } catch (error) {
+        console.error("Error in fetchCourses:", error)
+        setCourses([])
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchCourses()
@@ -55,7 +83,7 @@ export default function UserClasses() {
       {courses.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">You haven't added any classes yet.</p>
+            <p className="text-muted-foreground">You haven't joined any classes yet.</p>
             <Button className="mt-4" asChild>
               <Link href="/courses">Browse Classes</Link>
             </Button>
@@ -71,6 +99,7 @@ export default function UserClasses() {
               <CardContent>
                 <p className="font-medium">{course.name}</p>
                 <p className="text-sm text-muted-foreground">{course.department}</p>
+                <p className="text-sm text-muted-foreground">{course.universities?.name}</p>
               </CardContent>
             </Card>
           ))}

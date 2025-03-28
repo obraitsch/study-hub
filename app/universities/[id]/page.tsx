@@ -7,16 +7,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getSupabaseBrowserClient } from "@/lib/supabase"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Download, GraduationCap, MapPin } from "lucide-react"
+import { ArrowLeft, BookOpen, Download, GraduationCap, MapPin, CheckCircle2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { PageContainer } from "@/components/page-container"
+import { useAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
 
 export default function UniversityPage({ params }: { params: { id: string } }) {
   const [university, setUniversity] = useState<any>(null)
   const [courses, setCourses] = useState<any[]>([])
   const [materials, setMaterials] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [enrolledCourses, setEnrolledCourses] = useState<Set<string>>(new Set())
   const supabase = getSupabaseBrowserClient()
+  const { user } = useAuth()
 
   useEffect(() => {
     const fetchUniversityData = async () => {
@@ -60,7 +64,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 console.error(`Error counting materials for course ${course.id}:`, materialsError)
               }
 
-              // Count students for this course (users who have uploaded materials)
+              // Count students for this course (users who have uploaded materials or are enrolled)
               const { data: studentData, error: studentsError } = await supabase
                 .from("materials")
                 .select("user_id")
@@ -70,18 +74,45 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 console.error(`Error counting students for course ${course.id}:`, studentsError)
               }
 
+              // Get enrolled students count
+              const { count: enrolledCount, error: enrolledError } = await supabase
+                .from("course_enrollments")
+                .select("*", { count: "exact", head: true })
+                .eq("course_id", course.id)
+
+              if (enrolledError) {
+                console.error(`Error counting enrolled students for course ${course.id}:`, enrolledError)
+              }
+
               // Count unique users who have uploaded materials
               const uniqueStudents = new Set(studentData?.map(material => material.user_id) || []).size
+              // Add enrolled students to the count
+              const totalStudents = uniqueStudents + (enrolledCount || 0)
 
               return {
                 ...course,
                 materials_count: materialsCount || 0,
-                students_count: uniqueStudents,
+                students_count: totalStudents,
               }
             })
           )
 
           setCourses(coursesWithCounts)
+        }
+
+        // If user is logged in, fetch their enrolled courses
+        if (user) {
+          const { data: enrollments, error: enrollmentsError } = await supabase
+            .from("course_enrollments")
+            .select("course_id")
+            .eq("user_id", user.id)
+
+          if (enrollmentsError) {
+            console.error("Error fetching enrollments:", enrollmentsError)
+          } else {
+            const enrolledCourseIds = new Set(enrollments?.map(e => e.course_id) || [])
+            setEnrolledCourses(enrolledCourseIds)
+          }
         }
 
         // Get all course IDs for this university
@@ -145,7 +176,51 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
     }
 
     fetchUniversityData()
-  }, [params.id, supabase])
+  }, [params.id, supabase, user])
+
+  const handleJoinCourse = async (courseId: string) => {
+    if (!user) {
+      toast.error("You must be logged in to join a course")
+      return
+    }
+
+    try {
+      // Check if already enrolled
+      if (enrolledCourses.has(courseId)) {
+        toast.error("You are already enrolled in this course")
+        return
+      }
+
+      // Add enrollment
+      const { error } = await supabase
+        .from("course_enrollments")
+        .insert({
+          user_id: user.id,
+          course_id: courseId,
+        })
+
+      if (error) {
+        console.error("Error joining course:", error)
+        toast.error("Failed to join course. Please try again.")
+        return
+      }
+
+      // Update local state
+      setEnrolledCourses(prev => new Set([...prev, courseId]))
+      
+      // Update course student count
+      setCourses(prev => prev.map(course => 
+        course.id === courseId 
+          ? { ...course, students_count: (course.students_count || 0) + 1 }
+          : course
+      ))
+
+      toast.success("Successfully joined the course!")
+    } catch (error) {
+      console.error("Error in handleJoinCourse:", error)
+      toast.error("An unexpected error occurred")
+    }
+  }
 
   if (loading) {
     return (
@@ -241,8 +316,8 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
             {courses.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {courses.map((course) => (
-                  <Link key={course.id} href={`/courses/${course.id}`}>
-                    <Card className="h-full hover:bg-muted/50 transition-colors">
+                  <Card key={course.id} className="h-full hover:bg-muted/50 transition-colors">
+                    <Link href={`/courses/${course.id}`}>
                       <CardHeader>
                         <CardTitle className="flex flex-col">
                           <span className="text-lg">{course.code}</span>
@@ -258,8 +333,26 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                           </div>
                         </div>
                       </CardContent>
-                    </Card>
-                  </Link>
+                    </Link>
+                    {user && (
+                      <div className="p-4 pt-0">
+                        {enrolledCourses.has(course.id) ? (
+                          <Button variant="outline" className="w-full" disabled>
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Enrolled
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => handleJoinCourse(course.id)}
+                          >
+                            Join Class
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </Card>
                 ))}
               </div>
             ) : (
