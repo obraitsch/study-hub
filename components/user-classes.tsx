@@ -92,15 +92,17 @@ export default function UserClasses() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {courses.map((course) => (
-            <Card key={course.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">{course.code}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-medium">{course.name}</p>
-                <p className="text-sm text-muted-foreground">{course.department}</p>
-                <p className="text-sm text-muted-foreground">{course.universities?.name}</p>
-              </CardContent>
+            <Card key={course.id} className="hover:bg-muted/50 transition-colors">
+              <Link href={`/courses/${course.id}`} className="block">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">{course.code}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="font-medium">{course.name}</p>
+                  <p className="text-sm text-muted-foreground">{course.department}</p>
+                  <p className="text-sm text-muted-foreground">{course.universities?.name}</p>
+                </CardContent>
+              </Link>
             </Card>
           ))}
         </div>
