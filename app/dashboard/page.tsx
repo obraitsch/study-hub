@@ -10,9 +10,78 @@ import UserClasses from "@/components/user-classes"
 import { ProtectedRoute } from "@/components/protected-route"
 import { useAuth } from "@/hooks/use-auth"
 import { PageContainer } from "@/components/page-container"
+import { useEffect, useState } from "react"
+import { getSupabaseBrowserClient } from "@/lib/supabase"
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const [stats, setStats] = useState({
+    materialsUploaded: 0,
+    materialsDownloaded: 0,
+    courses: 0,
+    lastMonthUploads: 0,
+    lastMonthDownloads: 0
+  })
+  const supabase = getSupabaseBrowserClient()
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user) return
+
+      try {
+        // Get current date and first day of last month
+        const now = new Date()
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+        // Fetch materials uploaded by user
+        const { count: uploadedCount } = await supabase
+          .from("materials")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+
+        // Fetch materials uploaded last month
+        const { count: lastMonthUploads } = await supabase
+          .from("materials")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", firstDayLastMonth.toISOString())
+          .lt("created_at", firstDayThisMonth.toISOString())
+
+        // Fetch materials downloaded by user
+        const { count: downloadedCount } = await supabase
+          .from("user_downloads")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+
+        // Fetch materials downloaded last month
+        const { count: lastMonthDownloads } = await supabase
+          .from("user_downloads")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", firstDayLastMonth.toISOString())
+          .lt("created_at", firstDayThisMonth.toISOString())
+
+        // Fetch courses user is contributing to (courses where user has uploaded materials)
+        const { count: coursesCount } = await supabase
+          .from("course_enrollments")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+
+        setStats({
+          materialsUploaded: uploadedCount || 0,
+          materialsDownloaded: downloadedCount || 0,
+          courses: coursesCount || 0,
+          lastMonthUploads: lastMonthUploads || 0,
+          lastMonthDownloads: lastMonthDownloads || 0
+        })
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error)
+      }
+    }
+
+    fetchStats()
+  }, [user, supabase])
 
   return (
     <ProtectedRoute>
@@ -36,8 +105,8 @@ export default function DashboardPage() {
               <Upload className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">12</div>
-              <p className="text-xs text-muted-foreground">+3 from last month</p>
+              <div className="text-2xl font-bold">{stats.materialsUploaded}</div>
+              <p className="text-xs text-muted-foreground">+{stats.lastMonthUploads} from last month</p>
             </CardContent>
           </Card>
           <Card>
@@ -46,8 +115,8 @@ export default function DashboardPage() {
               <Download className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">24</div>
-              <p className="text-xs text-muted-foreground">+8 from last month</p>
+              <div className="text-2xl font-bold">{stats.materialsDownloaded}</div>
+              <p className="text-xs text-muted-foreground">+{stats.lastMonthDownloads} from last month</p>
             </CardContent>
           </Card>
           <Card>
@@ -56,8 +125,8 @@ export default function DashboardPage() {
               <BookOpen className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">5</div>
-              <p className="text-xs text-muted-foreground">Courses you're contributing to</p>
+              <div className="text-2xl font-bold">{stats.courses}</div>
+              <p className="text-xs text-muted-foreground">Courses you're enrolled in</p>
             </CardContent>
           </Card>
         </div>
