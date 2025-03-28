@@ -40,46 +40,33 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           setCourse(courseData)
         }
 
-        // Fetch course materials with metadata using a join
-        // This query gets materials that are linked to this course via material_metadata
+        // Fetch course materials
         const { data: materialsData, error: materialsError } = await supabase
           .from("materials")
           .select("*")
           .eq("course_id", courseId)
           .order("created_at", { ascending: false })
 
-        // Now get the metadata for these materials
-        let transformedMaterials = []
-        if (!materialsError && materialsData && materialsData.length > 0) {
-          // Get metadata for these materials
-          const { data: metadataData, error: metadataError } = await supabase
-            .from("material_metadata")
-            .select("*")
-            .eq("course_id", courseId)
-          
-          if (metadataError) {
-            console.error("Error fetching metadata:", metadataError)
-          } else {
-            console.log("Fetched metadata:", metadataData)
+        if (materialsError) {
+          console.error("Error fetching materials:", materialsError)
+          setMaterials([])
+        } else if (materialsData && materialsData.length > 0) {
+          // Get user data for all materials
+          const userIds = materialsData.map(m => m.user_id)
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("id, name")
+            .in("id", userIds)
+
+          if (userError) {
+            console.error("Error fetching user data:", userError)
           }
-          
-          // Match metadata with materials
-          if (metadataData) {
-            transformedMaterials = materialsData.map(material => {
-              const metadata = metadataData.find(md => md.material_id === material.id)
-              return {
-                ...material,
-                url: metadata?.url,
-                file_name: metadata?.original_filename,
-                file_size: metadata?.size,
-                file_type: metadata?.file_type,
-                user_name: metadata?.user_id // We'll get the user name in a separate query if needed
-              }
-            })
-          } else {
-            transformedMaterials = materialsData
-          }
-          
+
+          // Transform the materials data to include user name
+          const transformedMaterials = materialsData.map(material => ({
+            ...material,
+            user_name: userData?.find(u => u.id === material.user_id)?.name || 'Unknown User'
+          }))
           setMaterials(transformedMaterials)
         } else {
           setMaterials([])

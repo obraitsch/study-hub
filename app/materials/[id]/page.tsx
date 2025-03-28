@@ -5,14 +5,24 @@ import { Star, School, Clock, User } from 'lucide-react'
 import { MaterialActions } from '@/components/material-actions'
 import { MaterialPreviewWrapper } from '@/components/material-preview-wrapper'
 
-export default async function MaterialPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: {
+    id: string
+  }
+}
+
+export default async function MaterialPage({ params }: PageProps) {
   const supabase = getSupabaseServerClient()
   
   if (!supabase) {
     throw new Error('Failed to initialize Supabase client')
   }
 
-  const { data: material, error } = await supabase
+  // Debug log for params
+  console.log('Page Params:', params)
+
+  // First get the material
+  const { data: material, error: materialError } = await supabase
     .from('materials')
     .select(`
       *,
@@ -23,13 +33,44 @@ export default async function MaterialPage({ params }: { params: { id: string } 
       universities (
         name,
         id
+      ),
+      material_metadata (
+        url,
+        file_type,
+        original_filename
       )
     `)
     .eq('id', params.id)
     .single()
 
-  if (error || !material) {
+  if (materialError || !material) {
     notFound()
+  }
+
+  // Debug log for material
+  console.log('Material Data:', {
+    id: material.id,
+    type: material.type,
+    title: material.title,
+    description: material.description,
+    user_id: material.user_id,
+    created_at: material.created_at,
+    hasMetadata: !!material.material_metadata
+  })
+
+  // If no metadata exists, try to find it
+  if (!material.material_metadata) {
+    const { data: metadata, error: metadataError } = await supabase
+      .from('material_metadata')
+      .select('*')
+      .eq('material_id', material.id)
+      .single()
+
+    if (metadataError) {
+      console.error('Error fetching metadata:', metadataError)
+    } else if (metadata) {
+      material.material_metadata = metadata
+    }
   }
 
   return (

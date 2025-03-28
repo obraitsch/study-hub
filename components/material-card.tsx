@@ -20,7 +20,21 @@ interface MaterialCardProps {
     rating: number | null
     credit_cost: number
     user_id: string
-    file_url: string | null
+    url: string | null
+    original_filename: string
+    file_type: string
+    file_size: number
+    downloads: number
+    is_university_specific: boolean
+    course_id?: string
+    university_id?: string
+    created_at: string
+    users?: {
+      name: string
+    }
+    universities?: {
+      name: string
+    }
   }
   onPurchaseSuccess?: () => void
 }
@@ -92,52 +106,58 @@ export function MaterialCard({ material, onPurchaseSuccess }: MaterialCardProps)
   }
 
   return (
-    <Link href={`/materials/${material.id}`} className="block">
-      <Card className="w-full hover:shadow-md transition-shadow">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">{material.title}</h3>
-            <Badge variant="secondary">{material.type}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600 mb-4">{material.description}</p>
-          <div className="flex items-center gap-2 mb-4">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm">
-              {material.rating ? material.rating.toFixed(1) : 'No ratings yet'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">
-              {material.credit_cost} credit{material.credit_cost !== 1 ? 's' : ''}
-            </span>
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          {hasAccess && material.file_url ? (
-            <Button asChild variant="outline">
-              <Link href={material.file_url} target="_blank" onClick={(e) => e.stopPropagation()}>
-                <Download className="h-4 w-4 mr-2" />
-                Download
-              </Link>
-            </Button>
-          ) : isOwner ? (
-            <Button variant="outline" className="w-full" disabled>
-              Owned
-            </Button>
-          ) : (
-            <Button 
-              onClick={handlePurchase}
-              disabled={isPurchasing}
-              variant="outline"
-              className="w-full"
-            >
-              {isPurchasing ? 'Purchasing...' : 'Purchase'}
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
-    </Link>
+    <div className="relative">
+      <Link href={`/materials/${material.id}`} className="block">
+        <Card className="w-full hover:shadow-md transition-shadow">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{material.title}</h3>
+              <Badge variant="secondary">{material.type}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 mb-4">{material.description}</p>
+            <div className="flex items-center gap-2 mb-4">
+              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              <span className="text-sm">
+                {material.rating ? material.rating.toFixed(1) : 'No ratings yet'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {material.credit_cost} credit{material.credit_cost !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            {!hasAccess && !isOwner && (
+              <Button 
+                onClick={handlePurchase}
+                disabled={isPurchasing}
+                variant="outline"
+                className="w-full"
+              >
+                {isPurchasing ? 'Purchasing...' : 'Purchase'}
+              </Button>
+            )}
+            {isOwner && (
+              <Button variant="outline" className="w-full" disabled>
+                Owned
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+      </Link>
+      {hasAccess && material.url && (
+        <div className="absolute bottom-4 right-4">
+          <Button asChild variant="outline">
+            <Link href={material.url} target="_blank">
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Link>
+          </Button>
+        </div>
+      )}
+    </div>
   )
 } 

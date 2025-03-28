@@ -143,7 +143,7 @@ export default function UploadPage() {
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
       const filePath = `${fileName}`
       
-      // Using default bucket name 'materials' instead of 'uploads'
+      // Using default bucket name 'materials'
       const { error: uploadError } = await supabase.storage
         .from('materials')
         .upload(filePath, file)
@@ -157,45 +157,22 @@ export default function UploadPage() {
         .from('materials')
         .getPublicUrl(filePath)
 
-      // 4. Now use the material_metadata table for storing detailed info
-      const metadataData = {
+      // 4. Create the material record with all fields
+      const materialData = {
         title: formData.title,
         description: formData.description,
         type: formData.type,
         url: publicUrl,
         original_filename: file.name,
-        size: file.size,
         file_type: file.type,
-        course_id: formData.course_id,
-        university_id: formData.university_id,
-        user_id: user.id,
+        file_size: file.size,
         credit_cost: 1,
-        rating: 0,
-        downloads: 0
-      }
-      
-      const { data: metadataInsertData, error: metadataError } = await supabase
-        .from('material_metadata')
-        .insert([metadataData])
-        .select()
-      
-      if (metadataError) {
-        throw new Error("Error creating metadata record: " + metadataError.message)
-      }
-
-      // 5. Insert into materials table with only the fields it actually has
-      const materialData = {
-        title: formData.title,
-        description: formData.description,
-        type: formData.type,
-        price: 0,
         downloads: 0,
         rating: 0,
         is_university_specific: universityId ? true : false,
         course_id: formData.course_id,
         university_id: userProfile.university_id || formData.university_id,
         user_id: user.id,
-        credit_cost: 1,
       }
 
       console.log("Inserting material data:", materialData)
@@ -209,18 +186,7 @@ export default function UploadPage() {
         throw new Error("Error creating material record: " + insertError.message)
       }
 
-      // 6. Now update the material_metadata with the material_id
-      const materialId = materialInsertData[0]?.id
-      const metadataId = metadataInsertData[0]?.id
-      
-      if (materialId && metadataId) {
-        await supabase
-          .from('material_metadata')
-          .update({ material_id: materialId })
-          .eq('id', metadataId)
-      }
-
-      // 7. Award 1 credit to the user for uploading
+      // 5. Award 1 credit to the user for uploading
       const { data: currentUser, error: userFetchError } = await supabase
         .from('users')
         .select('credits')

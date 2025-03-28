@@ -64,7 +64,7 @@ export default function MaterialsPage() {
         // Fetch public materials
         const { data: publicData, error: publicError } = await supabase
           .from("materials")
-          .select(`*, users(name), universities(name)`)
+          .select("*")
           .eq("is_university_specific", false)
           .order("created_at", { ascending: false })
 
@@ -76,7 +76,36 @@ export default function MaterialsPage() {
           console.error("Error fetching public materials:", errorMessage);
           return;
         }
-        setPublicMaterials(publicData || [])
+
+        // If we got the basic data, try to fetch the related data
+        if (publicData) {
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("id, name")
+            .in("id", publicData.map(m => m.user_id));
+
+          if (userError) {
+            console.error("Error fetching user data:", userError);
+          }
+
+          const { data: universityData, error: universityError } = await supabase
+            .from("universities")
+            .select("id, name")
+            .in("id", publicData.map(m => m.university_id).filter(Boolean));
+
+          if (universityError) {
+            console.error("Error fetching university data:", universityError);
+          }
+
+          // Combine the data
+          const enrichedData = publicData.map(material => ({
+            ...material,
+            user: userData?.find(u => u.id === material.user_id),
+            university: universityData?.find(u => u.id === material.university_id)
+          }));
+
+          setPublicMaterials(enrichedData);
+        }
 
         // Get user's profile to ensure we have the latest universityId
         if (user?.id) {
@@ -97,28 +126,12 @@ export default function MaterialsPage() {
           if (universityId) {
             console.log("Fetching university materials for universityId:", universityId);
             
-            // First, let's check what materials exist for this university without any filters
-            const { data: allMaterials, error: checkError } = await supabase
-              .from("materials")
-              .select("*")
-              .eq("university_id", universityId);
-            
-            console.log("All materials for this university (unfiltered):", allMaterials);
-            
-            // Now fetch the specific materials we want
+            // Fetch university materials with the same approach
             const { data: uniData, error: uniError } = await supabase
               .from("materials")
-              .select(`
-                *,
-                users (
-                  name
-                ),
-                universities (
-                  name
-                )
-              `)
+              .select("*")
               .eq("university_id", universityId)
-              .order("created_at", { ascending: false })
+              .order("created_at", { ascending: false });
 
             if (uniError) {
               const errorMessage = typeof uniError === 'object' ? 
@@ -128,11 +141,36 @@ export default function MaterialsPage() {
               console.error("Error fetching university materials:", errorMessage);
               return;
             }
-            console.log("Fetched university materials (filtered):", uniData);
-            setUniversityMaterials(uniData || []);
-            setUserUniversityId(universityId);
-            console.log("University Materials state after setting:", uniData || []);
-            console.log("User University ID state after setting:", universityId);
+
+            if (uniData) {
+              const { data: userData, error: userError } = await supabase
+                .from("users")
+                .select("id, name")
+                .in("id", uniData.map(m => m.user_id));
+
+              if (userError) {
+                console.error("Error fetching user data for university materials:", userError);
+              }
+
+              const { data: universityData, error: universityError } = await supabase
+                .from("universities")
+                .select("id, name")
+                .in("id", uniData.map(m => m.university_id).filter(Boolean));
+
+              if (universityError) {
+                console.error("Error fetching university data for university materials:", universityError);
+              }
+
+              // Combine the data
+              const enrichedUniData = uniData.map(material => ({
+                ...material,
+                user: userData?.find(u => u.id === material.user_id),
+                university: universityData?.find(u => u.id === material.university_id)
+              }));
+
+              setUniversityMaterials(enrichedUniData);
+              setUserUniversityId(universityId);
+            }
           } else {
             console.log("No university_id found in user profile");
             setUniversityMaterials([]);

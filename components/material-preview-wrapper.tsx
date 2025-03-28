@@ -7,7 +7,7 @@ interface MaterialPreviewWrapperProps {
     id: string
     content: string | null
     user_id: string
-    file_url: string | null
+    url: string | null
     credit_cost: number
     title: string
     description: string | null
@@ -18,6 +18,8 @@ interface MaterialPreviewWrapperProps {
     subject: string
     course_id?: string
     is_university_specific: boolean
+    file_type: string
+    original_filename: string
     universities?: {
       name: string
       id: string
