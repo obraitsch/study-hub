@@ -52,11 +52,16 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         let transformedMaterials = []
         if (!materialsError && materialsData && materialsData.length > 0) {
           // Get metadata for these materials
-          const materialIds = materialsData.map(material => material.id)
-          const { data: metadataData } = await supabase
+          const { data: metadataData, error: metadataError } = await supabase
             .from("material_metadata")
-            .select("*, user_id(name)")
-            .in("material_id", materialIds)
+            .select("*")
+            .eq("course_id", courseId)
+          
+          if (metadataError) {
+            console.error("Error fetching metadata:", metadataError)
+          } else {
+            console.log("Fetched metadata:", metadataData)
+          }
           
           // Match metadata with materials
           if (metadataData) {
@@ -68,7 +73,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                 file_name: metadata?.original_filename,
                 file_size: metadata?.size,
                 file_type: metadata?.file_type,
-                user_name: metadata?.user_id?.name
+                user_name: metadata?.user_id // We'll get the user name in a separate query if needed
               }
             })
           } else {
