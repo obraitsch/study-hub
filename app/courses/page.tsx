@@ -41,20 +41,23 @@ export default function CoursesPage() {
                 console.error(`Error counting materials for course ${course.id}:`, materialsError)
               }
 
-              // Count students for this course
-              const { count: studentsCount, error: studentsError } = await supabase
-                .from("users")
-                .select("*", { count: "exact", head: true })
+              // Count students for this course (users who have uploaded materials)
+              const { data: studentData, error: studentsError } = await supabase
+                .from("materials")
+                .select("user_id")
                 .eq("course_id", course.id)
 
               if (studentsError) {
                 console.error(`Error counting students for course ${course.id}:`, studentsError)
               }
 
+              // Count unique users who have uploaded materials
+              const uniqueStudents = new Set(studentData?.map(material => material.user_id) || []).size
+
               return {
                 ...course,
                 materials_count: materialsCount || 0,
-                students_count: studentsCount || 0,
+                students_count: uniqueStudents,
               }
             })
           )
