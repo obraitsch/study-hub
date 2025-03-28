@@ -25,13 +25,74 @@ export default function UniversitiesPage() {
         if (error) {
           console.error("Error fetching universities:", error)
         } else {
-          // Add placeholder counts for now
-          const universitiesWithCounts =
-            data?.map((university) => ({
-              ...university,
-              materials_count: Math.floor(Math.random() * 100) + 20, // Random count for demo
-              students_count: Math.floor(Math.random() * 500) + 50, // Random count for demo
-            })) || []
+          // Get accurate counts for each university
+          const universitiesWithCounts = await Promise.all(
+            (data || []).map(async (university) => {
+              // Count materials directly linked to this university
+              const { count: directMaterialsCount, error: directMaterialsError } = await supabase
+                .from("materials")
+                .select("*", { count: "exact", head: true })
+                .eq("university_id", university.id)
+
+              if (directMaterialsError) {
+                console.error(`Error counting direct materials for university ${university.id}:`, directMaterialsError)
+              }
+
+              // Get all courses for this university
+              const { data: coursesData, error: coursesError } = await supabase
+                .from("courses")
+                .select("id")
+                .eq("university_id", university.id)
+
+              let courseMaterialsCount = 0
+              if (!coursesError && coursesData && coursesData.length > 0) {
+                // Get course IDs
+                const courseIds = coursesData.map(course => course.id)
+                
+                // Count materials linked to these courses
+                const { count: linkedMaterialsCount, error: linkedMaterialsError } = await supabase
+                  .from("materials")
+                  .select("*", { count: "exact", head: true })
+                  .in("course_id", courseIds)
+
+                if (linkedMaterialsError) {
+                  console.error(`Error counting course materials for university ${university.id}:`, linkedMaterialsError)
+                } else {
+                  courseMaterialsCount = linkedMaterialsCount || 0
+                }
+              }
+              
+              // Total materials count (excluding possible duplicates for simplicity)
+              const totalMaterialsCount = (directMaterialsCount || 0) + courseMaterialsCount
+
+              // Count students (users) for this university
+              const { count: studentsCount, error: studentsError } = await supabase
+                .from("users")
+                .select("*", { count: "exact", head: true })
+                .eq("university_id", university.id)
+
+              if (studentsError) {
+                console.error(`Error counting students for university ${university.id}:`, studentsError)
+              }
+              
+              // Count courses for this university
+              const { count: coursesCount, error: coursesCountError } = await supabase
+                .from("courses")
+                .select("*", { count: "exact", head: true })
+                .eq("university_id", university.id)
+
+              if (coursesCountError) {
+                console.error(`Error counting courses for university ${university.id}:`, coursesCountError)
+              }
+
+              return {
+                ...university,
+                materials_count: totalMaterialsCount,
+                students_count: studentsCount || 0,
+                courses_count: coursesCount || 0,
+              }
+            })
+          )
 
           setUniversities(universitiesWithCounts)
         }
@@ -81,9 +142,10 @@ export default function UniversitiesPage() {
                   <div className="flex flex-col space-y-2">
                     <h3 className="font-medium text-lg">{university.name}</h3>
                     <p className="text-sm text-muted-foreground">{university.location}</p>
-                    <div className="flex text-sm text-muted-foreground pt-2">
-                      <div className="mr-4">{university.materials_count || 0} materials</div>
+                    <div className="flex flex-wrap text-sm text-muted-foreground pt-2 gap-4">
+                      <div>{university.materials_count || 0} materials</div>
                       <div>{university.students_count || 0} students</div>
+                      <div>{university.courses_count || 0} courses</div>
                     </div>
                   </div>
                 </CardContent>

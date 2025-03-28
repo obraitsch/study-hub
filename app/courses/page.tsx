@@ -28,7 +28,38 @@ export default function CoursesPage() {
         if (error) {
           console.error("Error fetching courses:", error)
         } else {
-          setCourses(data || [])
+          // Get accurate counts for each course
+          const coursesWithCounts = await Promise.all(
+            (data || []).map(async (course) => {
+              // Count materials for this course
+              const { count: materialsCount, error: materialsError } = await supabase
+                .from("materials")
+                .select("*", { count: "exact", head: true })
+                .eq("course_id", course.id)
+
+              if (materialsError) {
+                console.error(`Error counting materials for course ${course.id}:`, materialsError)
+              }
+
+              // Count students for this course
+              const { count: studentsCount, error: studentsError } = await supabase
+                .from("users")
+                .select("*", { count: "exact", head: true })
+                .eq("course_id", course.id)
+
+              if (studentsError) {
+                console.error(`Error counting students for course ${course.id}:`, studentsError)
+              }
+
+              return {
+                ...course,
+                materials_count: materialsCount || 0,
+                students_count: studentsCount || 0,
+              }
+            })
+          )
+
+          setCourses(coursesWithCounts)
         }
       } catch (error) {
         console.error("Error in data fetching:", error)
