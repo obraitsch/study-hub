@@ -40,17 +40,44 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           setCourse(courseData)
         }
 
-        // Fetch course materials
+        // Fetch course materials with metadata using a join
+        // This query gets materials that are linked to this course via material_metadata
         const { data: materialsData, error: materialsError } = await supabase
           .from("materials")
-          .select("*, users(name)")
+          .select("*")
           .eq("course_id", courseId)
           .order("created_at", { ascending: false })
 
-        if (materialsError) {
-          console.error("Error fetching materials:", materialsError)
+        // Now get the metadata for these materials
+        let transformedMaterials = []
+        if (!materialsError && materialsData && materialsData.length > 0) {
+          // Get metadata for these materials
+          const materialIds = materialsData.map(material => material.id)
+          const { data: metadataData } = await supabase
+            .from("material_metadata")
+            .select("*, user_id(name)")
+            .in("material_id", materialIds)
+          
+          // Match metadata with materials
+          if (metadataData) {
+            transformedMaterials = materialsData.map(material => {
+              const metadata = metadataData.find(md => md.material_id === material.id)
+              return {
+                ...material,
+                url: metadata?.url,
+                file_name: metadata?.original_filename,
+                file_size: metadata?.size,
+                file_type: metadata?.file_type,
+                user_name: metadata?.user_id?.name
+              }
+            })
+          } else {
+            transformedMaterials = materialsData
+          }
+          
+          setMaterials(transformedMaterials)
         } else {
-          setMaterials(materialsData || [])
+          setMaterials([])
         }
       } catch (error) {
         console.error("Error in data fetching:", error)
@@ -165,7 +192,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                   </CardHeader>
                   <CardContent className="pb-2 flex-grow">
                     <div className="text-sm text-muted-foreground space-y-1">
-                      <p className="text-xs">By {material.users?.name}</p>
+                      <p className="text-xs">By {material.user_name}</p>
                       <p className="text-xs">Uploaded on {new Date(material.created_at).toLocaleDateString()}</p>
                     </div>
                   </CardContent>

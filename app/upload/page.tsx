@@ -48,7 +48,7 @@ export default function UploadPage() {
       setInitialLoading(true)
       
       try {
-        // If courseId is provided, fetch course details
+        console.log("Fetching table information...")
         if (courseId) {
           const { data, error } = await supabase
             .from("courses")
@@ -68,7 +68,6 @@ export default function UploadPage() {
           }
         }
         
-        // If universityId is provided, fetch university details
         if (universityId) {
           const { data, error } = await supabase
             .from("universities")
@@ -137,10 +136,11 @@ export default function UploadPage() {
       // 2. Upload the file to storage
       const fileExt = file.name.split('.').pop()
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
-      const filePath = `materials/${fileName}`
+      const filePath = `${fileName}`
       
+      // Using default bucket name 'materials' instead of 'uploads'
       const { error: uploadError } = await supabase.storage
-        .from('uploads')
+        .from('materials')
         .upload(filePath, file)
       
       if (uploadError) {
@@ -149,30 +149,66 @@ export default function UploadPage() {
 
       // 3. Get the URL for the uploaded file
       const { data: { publicUrl } } = supabase.storage
-        .from('uploads')
+        .from('materials')
         .getPublicUrl(filePath)
 
-      // 4. Insert record in the materials table
-      const { data, error: insertError } = await supabase
+      // 4. Now use the material_metadata table for storing detailed info
+      const metadataData = {
+        title: formData.title,
+        description: formData.description,
+        type: formData.type,
+        url: publicUrl,
+        original_filename: file.name,
+        size: file.size,
+        file_type: file.type,
+        course_id: formData.course_id,
+        university_id: formData.university_id,
+        user_id: user.id,
+      }
+      
+      const { data: metadataInsertData, error: metadataError } = await supabase
+        .from('material_metadata')
+        .insert([metadataData])
+        .select()
+      
+      if (metadataError) {
+        throw new Error("Error creating metadata record: " + metadataError.message)
+      }
+
+      // 5. Insert into materials table with only the fields it actually has
+      const materialData = {
+        title: formData.title,
+        description: formData.description,
+        type: formData.type,
+        price: 0,
+        downloads: 0,
+        rating: null,
+        is_university_specific: universityId ? true : false,
+        course_id: formData.course_id,
+        university_id: formData.university_id,
+        user_id: user.id,
+      }
+
+      console.log("Inserting material data:", materialData)
+
+      const { data: materialInsertData, error: insertError } = await supabase
         .from('materials')
-        .insert([
-          {
-            title: formData.title,
-            description: formData.description,
-            type: formData.type,
-            file_url: publicUrl,
-            file_name: file.name,
-            file_size: file.size,
-            file_type: file.type,
-            course_id: formData.course_id,
-            university_id: formData.university_id,
-            user_id: user.id,
-          }
-        ])
+        .insert([materialData])
         .select()
       
       if (insertError) {
         throw new Error("Error creating material record: " + insertError.message)
+      }
+
+      // 6. Now update the material_metadata with the material_id
+      const materialId = materialInsertData[0]?.id
+      const metadataId = metadataInsertData[0]?.id
+      
+      if (materialId && metadataId) {
+        await supabase
+          .from('material_metadata')
+          .update({ material_id: materialId })
+          .eq('id', metadataId)
       }
 
       toast({
