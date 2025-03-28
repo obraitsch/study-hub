@@ -148,6 +148,10 @@ export function MainNav() {
         <div className="ml-auto flex items-center space-x-4">
           {user ? (
             <>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-medium text-primary">{user.credits || 0}</span>
+                <span>credits</span>
+              </div>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/dashboard">Dashboard</Link>
               </Button>

@@ -222,9 +222,30 @@ export default function UploadPage() {
           .eq('id', metadataId)
       }
 
+      // 7. Award 1 credit to the user for uploading
+      const { data: currentUser, error: userFetchError } = await supabase
+        .from('users')
+        .select('credits')
+        .eq('id', user.id)
+        .single()
+
+      if (userFetchError) {
+        console.error("Error fetching user credits:", userFetchError)
+      } else {
+        const { error: creditError } = await supabase
+          .from('users')
+          .update({ credits: (currentUser.credits || 0) + 1 })
+          .eq('id', user.id)
+
+        if (creditError) {
+          console.error("Error awarding credit:", creditError)
+          // Don't throw here as the material was already uploaded successfully
+        }
+      }
+
       toast({
         title: "Success",
-        description: "Your material has been uploaded successfully",
+        description: "Your material has been uploaded successfully and you earned 1 credit!",
       })
 
       // Redirect based on context
