@@ -10,8 +10,13 @@ import Link from "next/link"
 import { ArrowLeft, BookOpen, Download, Users } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { PageContainer } from "@/components/page-container"
+import { use } from "react"
 
 export default function CoursePage({ params }: { params: { id: string } }) {
+  // Unwrap params using React.use() to fix the warning
+  const unwrappedParams = use(params);
+  const courseId = unwrappedParams.id;
+  
   const [course, setCourse] = useState<any>(null)
   const [materials, setMaterials] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +31,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         const { data: courseData, error: courseError } = await supabase
           .from("courses")
           .select("*, universities(name)")
-          .eq("id", params.id)
+          .eq("id", courseId)
           .single()
 
         if (courseError) {
@@ -39,7 +44,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         const { data: materialsData, error: materialsError } = await supabase
           .from("materials")
           .select("*, users(name)")
-          .eq("course_id", params.id)
+          .eq("course_id", courseId)
           .order("created_at", { ascending: false })
 
         if (materialsError) {
@@ -55,7 +60,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     }
 
     fetchCourseData()
-  }, [params.id, supabase])
+  }, [courseId, supabase])
 
   if (loading) {
     return (

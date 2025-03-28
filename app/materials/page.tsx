@@ -50,6 +50,12 @@ export default function MaterialsPage() {
   // 4. All useEffects together
   useEffect(() => {
     const fetchMaterials = async () => {
+      if (!supabase) {
+        setError("Supabase client not initialized");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true)
       try {
         // Fetch public materials
@@ -59,7 +65,14 @@ export default function MaterialsPage() {
           .eq("is_university_specific", false)
           .order("created_at", { ascending: false })
 
-        if (publicError) throw publicError
+        if (publicError) {
+          const errorMessage = typeof publicError === 'object' ? 
+            (publicError.message || JSON.stringify(publicError)) : 
+            String(publicError);
+          setError(errorMessage);
+          console.error("Error fetching public materials:", errorMessage);
+          return;
+        }
         setPublicMaterials(publicData || [])
 
         // Always fetch university materials (will be empty if no user)
@@ -70,11 +83,21 @@ export default function MaterialsPage() {
           .eq("university_id", user?.universityId || '')
           .order("created_at", { ascending: false })
 
-        if (uniError) throw uniError
+        if (uniError) {
+          const errorMessage = typeof uniError === 'object' ? 
+            (uniError.message || JSON.stringify(uniError)) : 
+            String(uniError);
+          setError(errorMessage);
+          console.error("Error fetching university materials:", errorMessage);
+          return;
+        }
         setUniversityMaterials(user?.universityId ? (uniData || []) : [])
-      } catch (err) {
-        setError(err.message)
-        console.error("Error fetching materials:", err)
+      } catch (err: any) {
+        const errorMessage = err ? 
+          (typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err)) : 
+          'Unknown error';
+        setError(errorMessage);
+        console.error("Error fetching materials:", errorMessage);
       } finally {
         setLoading(false)
       }
@@ -110,6 +133,11 @@ export default function MaterialsPage() {
   // Fetch metadata effect
   useEffect(() => {
     const fetchMetadata = async () => {
+      if (!supabase) {
+        console.error("Supabase client not initialized");
+        return;
+      }
+
       try {
         // Fetch subjects
         const { data: subjectsData } = await supabase
