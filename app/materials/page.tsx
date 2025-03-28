@@ -32,6 +32,7 @@ export default function MaterialsPage() {
   const [publicMaterials, setPublicMaterials] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [userUniversityId, setUserUniversityId] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     university: "all",
     subject: "all",
@@ -127,6 +128,9 @@ export default function MaterialsPage() {
             }
             console.log("Fetched university materials (filtered):", uniData);
             setUniversityMaterials(uniData || []);
+            setUserUniversityId(universityId);
+            console.log("University Materials state after setting:", uniData || []);
+            console.log("User University ID state after setting:", universityId);
           } else {
             console.log("No university_id found in user profile");
             setUniversityMaterials([]);
@@ -151,7 +155,15 @@ export default function MaterialsPage() {
 
   // Filter materials effect
   useEffect(() => {
+    // Create a Set to track unique material IDs
+    const uniqueMaterialIds = new Set();
     const filtered = [...publicMaterials, ...universityMaterials].filter((material) => {
+      // Skip if we've already seen this material ID
+      if (uniqueMaterialIds.has(material.id)) {
+        return false;
+      }
+      uniqueMaterialIds.add(material.id);
+
       const matchesSearch = 
         material.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         material.description?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -401,11 +413,18 @@ export default function MaterialsPage() {
 
                   {universityMaterials.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {universityMaterials
-                        .filter(material => material.is_university_specific && material.university_id === user?.universityId)
-                        .map((material) => (
+                      {console.log('University Materials before render:', universityMaterials)}
+                      {universityMaterials.map((material) => {
+                        console.log('Rendering material:', {
+                          id: material.id,
+                          title: material.title,
+                          is_university_specific: material.is_university_specific,
+                          university_id: material.university_id
+                        });
+                        return (
                           <MaterialCard key={material.id} material={material} />
-                        ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-12">
