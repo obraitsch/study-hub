@@ -17,6 +17,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { PageContainer } from "@/components/page-container"
 import { useCachedFetch } from "@/hooks/use-cached-fetch"
+import { MaterialCard } from "@/components/material-card"
 
 export default function MaterialsPage() {
   // 1. Context hooks
@@ -44,6 +45,7 @@ export default function MaterialsPage() {
   const [universities, setUniversities] = useState<any[]>([])
   const [subjects, setSubjects] = useState<any[]>([])
   const [materialTypes, setMaterialTypes] = useState<any[]>([])
+  const [userCredits, setUserCredits] = useState<number>(0)
 
   // 3. Initialize Supabase client
   const supabase = getSupabaseBrowserClient()
@@ -223,6 +225,24 @@ export default function MaterialsPage() {
     fetchMetadata()
   }, [supabase])
 
+  useEffect(() => {
+    const fetchUserCredits = async () => {
+      if (!user?.id) return
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('credits')
+        .eq('id', user.id)
+        .single()
+
+      if (!error && data) {
+        setUserCredits(data.credits)
+      }
+    }
+
+    fetchUserCredits()
+  }, [user?.id, supabase])
+
   if (loading) {
     return <LoadingSpinner />
   }
@@ -231,9 +251,35 @@ export default function MaterialsPage() {
     setFilters((prev) => ({ ...prev, [name]: value }))
   }
 
+  const handleCreditUpdate = async () => {
+    if (!user?.id) return
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('credits')
+        .eq('id', user.id)
+        .single()
+
+      if (!error && data) {
+        setUserCredits(data.credits)
+      }
+    } catch (error) {
+      console.error('Error updating credits:', error)
+    }
+  }
+
   return (
     <PageContainer>
-      <h1 className="text-3xl font-bold mb-6">Study Materials</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Study Materials</h1>
+        {user && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Your Credits:</span>
+            <span className="font-semibold">{userCredits}</span>
+          </div>
+        )}
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
         <TabsList className="mb-4">
@@ -383,9 +429,11 @@ export default function MaterialsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {materials.map((material) => (
-                    <div key={material.id} className="w-full">
-                      <MaterialCard material={material} />
-                    </div>
+                    <MaterialCard 
+                      key={material.id} 
+                      material={material} 
+                      onPurchaseSuccess={handleCreditUpdate}
+                    />
                   ))}
                 </div>
               </div>
@@ -451,67 +499,6 @@ export default function MaterialsPage() {
         </TabsContent>
       </Tabs>
     </PageContainer>
-  )
-}
-
-function MaterialCard({ material }: { material: any }) {
-  return (
-    <Card className="flex flex-col h-full w-full">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <Badge variant="outline" className="truncate max-w-[120px]">{material.type}</Badge>
-          <div className="flex items-center text-sm">
-            <Star className="h-4 w-4 fill-primary text-primary mr-1" />
-            <span>{material.rating}</span>
-          </div>
-        </div>
-        <div className="mt-2 line-clamp-2 font-semibold">
-          <Link href={`/materials/${material.id}`} className="hover:underline">
-            {material.title}
-          </Link>
-        </div>
-      </CardHeader>
-      <CardContent className="pb-2 flex-grow">
-        <div className="text-sm text-muted-foreground space-y-1">
-          <p className="truncate max-w-full">
-            {material.course_id ? material.course_id : "General"} • {material.subject}
-          </p>
-          <p className="truncate max-w-full">{material.universities?.name}</p>
-          <p className="text-xs truncate max-w-full">By {material.users?.name}</p>
-          <p className="text-xs">Uploaded on {new Date(material.created_at).toLocaleDateString()}</p>
-        </div>
-      </CardContent>
-      <CardFooter className="pt-2">
-        <div className="flex flex-col w-full gap-2">
-          <div className="flex justify-between items-center w-full">
-            <div className="text-xs text-muted-foreground">{material.downloads} downloads</div>
-            <div className="flex items-center gap-2">
-              {material.is_university_specific && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <School className="h-3 w-3" /> University
-                </Badge>
-              )}
-              {material.price > 0 ? (
-                <Badge variant="secondary">
-                  {material.price} credits
-                </Badge>
-              ) : (
-                <Badge variant="secondary">
-                  Free
-                </Badge>
-              )}
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-              <Link href={`/materials/${material.id}`}>
-                <Download className="h-4 w-4 mr-1" /> View
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </CardFooter>
-    </Card>
   )
 }
 

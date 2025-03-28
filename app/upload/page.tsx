@@ -113,18 +113,12 @@ export default function UploadPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (!file) {
-      toast({
-        title: "Error",
-        description: "Please select a file to upload",
-        variant: "destructive",
-      })
+      toast.error('Please select a file to upload')
       return
     }
 
     setLoading(true)
-    
     try {
       // 1. Get current user and their profile
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -175,6 +169,9 @@ export default function UploadPage() {
         course_id: formData.course_id,
         university_id: formData.university_id,
         user_id: user.id,
+        credit_cost: 1,
+        rating: 0,
+        downloads: 0
       }
       
       const { data: metadataInsertData, error: metadataError } = await supabase
@@ -193,11 +190,12 @@ export default function UploadPage() {
         type: formData.type,
         price: 0,
         downloads: 0,
-        rating: null,
+        rating: 0,
         is_university_specific: universityId ? true : false,
         course_id: formData.course_id,
         university_id: userProfile.university_id || formData.university_id,
         user_id: user.id,
+        credit_cost: 1,
       }
 
       console.log("Inserting material data:", materialData)
@@ -243,10 +241,7 @@ export default function UploadPage() {
         }
       }
 
-      toast({
-        title: "Success",
-        description: "Your material has been uploaded successfully and you earned 1 credit!",
-      })
+      toast.success('Material uploaded successfully!')
 
       // Redirect based on context
       if (courseId) {
@@ -259,11 +254,7 @@ export default function UploadPage() {
       
     } catch (error: any) {
       console.error("Error in upload process:", error)
-      toast({
-        title: "Upload Failed",
-        description: error.message || "There was an error uploading your file",
-        variant: "destructive",
-      })
+      toast.error('Failed to upload material')
     } finally {
       setLoading(false)
     }

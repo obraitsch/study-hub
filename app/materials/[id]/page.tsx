@@ -1,9 +1,9 @@
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Download, Star, School, Clock, User } from 'lucide-react'
-import Link from 'next/link'
+import { Star, School, Clock, User } from 'lucide-react'
+import { MaterialActions } from '@/components/material-actions'
+import { MaterialPreviewWrapper } from '@/components/material-preview-wrapper'
 
 export default async function MaterialPage({ params }: { params: { id: string } }) {
   const supabase = getSupabaseServerClient()
@@ -57,7 +57,7 @@ export default async function MaterialPage({ params }: { params: { id: string } 
             </div>
             <div className="flex items-center gap-1">
               <Star className="h-4 w-4 fill-primary text-primary" />
-              <span>{material.rating} rating</span>
+              <span>{material.rating ? material.rating.toFixed(1) : 'No ratings yet'}</span>
             </div>
           </div>
         </div>
@@ -71,14 +71,7 @@ export default async function MaterialPage({ params }: { params: { id: string } 
               <p className="text-muted-foreground">{material.description}</p>
             </div>
 
-            {material.content && (
-              <div className="bg-card rounded-lg p-6">
-                <h2 className="text-2xl font-semibold mb-4">Content</h2>
-                <div className="prose max-w-none">
-                  {material.content}
-                </div>
-              </div>
-            )}
+            <MaterialPreviewWrapper material={material} />
           </div>
 
           {/* Right Column - Details */}
@@ -110,25 +103,7 @@ export default async function MaterialPage({ params }: { params: { id: string } 
             </div>
 
             <div className="bg-card rounded-lg p-6">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-semibold">Price</span>
-                  {material.price > 0 ? (
-                    <Badge variant="secondary" className="text-lg">
-                      {material.price} credits
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-lg">
-                      Free
-                    </Badge>
-                  )}
-                </div>
-                <Button size="lg" className="w-full" asChild>
-                  <Link href={`/materials/${material.id}/download`}>
-                    <Download className="h-5 w-5 mr-2" /> Download
-                  </Link>
-                </Button>
-              </div>
+              <MaterialActions material={material} />
             </div>
           </div>
         </div>
