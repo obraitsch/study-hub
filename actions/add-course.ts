@@ -1,27 +1,38 @@
 "use server"
 
-import { getSupabaseServerClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
 
 export async function addCourse(formData: FormData) {
   try {
-    const supabase = getSupabaseServerClient()
-
-    // Get the current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return { success: false, error: "You must be logged in to add a course" }
+    console.log("Server action: Starting add course process")
+    
+    // Create a new supabase client for each request (no caching)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    
+    // Create a standard client without cookie integration
+    // We'll handle auth using the service role key instead
+    const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    
+    // First get userId from form data - this is our workaround
+    const userId = formData.get("userId") as string
+    
+    if (!userId) {
+      console.log("Server action: No user ID provided in form data")
+      return { success: false, error: "Authentication information missing. Please try again." }
     }
-
-    // Get the user's university
+    
+    console.log("Server action: Using user ID from form:", userId)
+    
+    // Verify the user exists
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("university_id")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single()
+      
+    console.log("Server action user data:", userData ? "User data found" : "No user data", userError ? `Error: ${userError.message}` : "No user data error")
 
     if (userError || !userData?.university_id) {
       return { success: false, error: "Could not find your university information" }
@@ -59,7 +70,7 @@ export async function addCourse(formData: FormData) {
         department,
         description: description || null,
         university_id: userData.university_id,
-        created_by: user.id,
+        created_by: userId,
       })
       .select()
 

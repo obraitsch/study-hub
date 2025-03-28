@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +13,7 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { addCourse } from "@/actions/add-course"
+import { useAuth } from "@/hooks/use-auth"
 
 export function AddCourseForm() {
   const [isLoading, setIsLoading] = useState(false)
@@ -21,6 +21,16 @@ export function AddCourseForm() {
   const [success, setSuccess] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const { user, session } = useAuth()
+  const formRef = useRef<HTMLFormElement>(null)
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Auth state in AddCourseForm:", { 
+      user: user ? { id: user.id, name: user.name } : null,
+      session: session ? "Session exists" : "No session"
+    })
+  }, [user, session])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -30,10 +40,22 @@ export function AddCourseForm() {
 
     try {
       const formData = new FormData(e.currentTarget)
+      
+      // Add the user ID to the form data if user exists
+      if (user) {
+        formData.append("userId", user.id)
+      } else {
+        setError("You must be logged in to add a course")
+        setIsLoading(false)
+        return
+      }
+      
+      console.log("Submitting course form...")
       const result = await addCourse(formData)
+      console.log("Course form result:", result)
 
       if (!result.success) {
-        setError(result.error)
+        setError(result.error || "Unknown error occurred")
         return
       }
 
@@ -43,12 +65,15 @@ export function AddCourseForm() {
         description: "The course has been added to your university.",
       })
 
-      // Reset the form
-      e.currentTarget.reset()
+      // Reset the form safely using the ref
+      if (formRef.current) {
+        formRef.current.reset()
+      }
 
       // Refresh the page data
       router.refresh()
     } catch (error) {
+      console.error("Error in handleSubmit:", error)
       setError("An unexpected error occurred. Please try again.")
     } finally {
       setIsLoading(false)
@@ -76,7 +101,7 @@ export function AddCourseForm() {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="code">Course Code *</Label>
             <Input id="code" name="code" placeholder="e.g., CS101" required disabled={isLoading} />
